@@ -1,0 +1,104 @@
+{
+	"name": "Notebook_sp",
+	"properties": {
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"bigDataPool": {
+			"referenceName": "sparkpool",
+			"type": "BigDataPoolReference"
+		},
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "9b0b264b-9341-47b4-b19a-1449ca07114f"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"synapse_widget": {
+				"version": "0.1"
+			},
+			"enableDebugMode": false,
+			"language_info": {
+				"name": "python"
+			},
+			"a365ComputeOptions": {
+				"id": "/subscriptions/024536a9-a3fa-4a9b-937e-33d7fc23f350/resourceGroups/rs_Bt_Anupa/providers/Microsoft.Synapse/workspaces/wp-customer360/bigDataPools/sparkpool",
+				"name": "sparkpool",
+				"type": "Spark",
+				"endpoint": "https://wp-customer360.dev.azuresynapse.net/livyApi/versions/2019-11-01-preview/sparkPools/sparkpool",
+				"auth": {
+					"type": "AAD",
+					"authResource": "https://dev.azuresynapse.net",
+					"authHeader": null
+				},
+				"sparkVersion": "3.5",
+				"nodeCount": 3,
+				"cores": 4,
+				"memory": 28,
+				"extraHeader": null
+			},
+			"sessionKeepAliveTimeout": 15
+		},
+		"cells": [
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"Cell 1: read the 4 files "
+				]
+			},
+			{
+				"cell_type": "code",
+				"source": [
+					"src = \"abfss://nyctaxi@adlscustomer360anupa.dfs.core.windows.net/yellow_tripdata_2025-*.parquet\"\n",
+					"df = spark.read.parquet(src)\n",
+					"print(df.count())\n",
+					"df.printSchema()"
+				],
+				"execution_count": 1
+			},
+			{
+				"cell_type": "code",
+				"source": [
+					"from pyspark.sql.functions import year, month, col\n",
+					"\n",
+					"df2 = (df.withColumn(\"tpep_pickup_datetime\",  col(\"tpep_pickup_datetime\").cast(\"timestamp\"))\n",
+					"         .withColumn(\"tpep_dropoff_datetime\", col(\"tpep_dropoff_datetime\").cast(\"timestamp\"))\n",
+					"         .withColumn(\"year\",  year(col(\"tpep_pickup_datetime\")))\n",
+					"         .withColumn(\"month\", month(col(\"tpep_pickup_datetime\")))\n",
+					"         .filter((col(\"year\") == 2025) & (col(\"month\").between(1, 4))))\n",
+					"\n",
+					"dst = \"abfss://nyctaxi@adlscustomer360anupa.dfs.core.windows.net/delta/yellow_tripdata\"\n",
+					"(df2.write.format(\"delta\")\n",
+					"     .mode(\"overwrite\")\n",
+					"     .partitionBy(\"year\", \"month\")\n",
+					"     .save(dst))\n",
+					"display(dst)"
+				],
+				"execution_count": 4
+			},
+			{
+				"cell_type": "code",
+				"source": [
+					"spark.read.format(\"delta\").load(dst).groupBy(\"year\",\"month\").count().orderBy(\"month\").show()"
+				],
+				"execution_count": 5
+			}
+		]
+	}
+}

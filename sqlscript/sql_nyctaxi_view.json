@@ -1,0 +1,17 @@
+{
+	"name": "sql_nyctaxi_view",
+	"properties": {
+		"content": {
+			"query": "--Database for the serverless objects\nCREATE DATABASE nyctaxi_db;\nGO\nUSE nyctaxi_db;\nGO\n--Pointer to the ADLS container\nCREATE EXTERNAL DATA SOURCE ds_nyctaxi\nWITH (LOCATION = 'https://adlscustomer360anupa.dfs.core.windows.net/nyctaxi');\nGO\n--View over the Delta table (partitioned by year/month)\nCREATE VIEW dbo.vw_yellow_tripdata AS\nSELECT * FROM OPENROWSET(\n    BULK 'delta/yellow_tripdata/',\n    DATA_SOURCE = 'ds_nyctaxi',\n    FORMAT = 'DELTA') AS trips;\nGO\n--Check: rows per month\nSELECT [year], [month], COUNT(*) AS trips\nFROM dbo.vw_yellow_tripdata\nGROUP BY [year], [month]\nORDER BY [month];",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "nyctaxi_db",
+				"poolName": "Built-in"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}

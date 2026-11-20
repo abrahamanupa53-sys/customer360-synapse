@@ -1,0 +1,229 @@
+{
+	"name": "pl_github_to_adls_raw",
+	"properties": {
+		"activities": [
+			{
+				"name": "ForEach1",
+				"type": "ForEach",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@pipeline().parameters.p_files",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "cp_github_to_raw",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "BinarySource",
+									"storeSettings": {
+										"type": "HttpReadSettings",
+										"requestMethod": "GET"
+									},
+									"formatSettings": {
+										"type": "BinaryReadSettings"
+									}
+								},
+								"sink": {
+									"type": "BinarySink",
+									"storeSettings": {
+										"type": "AzureBlobFSWriteSettings"
+									}
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "ds_github_file",
+									"type": "DatasetReference",
+									"parameters": {
+										"relative_url": {
+											"value": "@concat('Bootcamp/project3/', item().file_name)",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "ds_adls_raw_file",
+									"type": "DatasetReference",
+									"parameters": {
+										"folder_path": {
+											"value": "@item().folder_path",
+											"type": "Expression"
+										},
+										"file_name": {
+											"value": "@item().file_name",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "cp_raw_to_stage",
+							"type": "Copy",
+							"dependsOn": [
+								{
+									"activity": "cp_github_to_raw",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "DelimitedTextSource",
+									"storeSettings": {
+										"type": "AzureBlobFSReadSettings",
+										"recursive": true,
+										"enablePartitionDiscovery": false
+									},
+									"formatSettings": {
+										"type": "DelimitedTextReadSettings"
+									}
+								},
+								"sink": {
+									"type": "AzureSqlSink",
+									"preCopyScript": {
+										"value": "TRUNCATE TABLE @{item().stage_table}",
+										"type": "Expression"
+									},
+									"writeBehavior": "insert",
+									"sqlWriterUseTableLock": false,
+									"disableMetricsCollection": false
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "ds_adls_csv",
+									"type": "DatasetReference",
+									"parameters": {
+										"container": {
+											"value": "@item().container",
+											"type": "Expression"
+										},
+										"folder_path": "@item().folder_path",
+										"file_name": "@item().file_name"
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "ds_sql_stage",
+									"type": "DatasetReference",
+									"parameters": {
+										"schema_name": {
+											"value": "@split(item().stage_table,'.')[0]",
+											"type": "Expression"
+										},
+										"table_name": "@split(item().stage_table,'.')[1]"
+									}
+								}
+							]
+						},
+						{
+							"name": "sp_load_from_stage",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "cp_raw_to_stage",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": {
+									"value": "dbo.usp_load_from_stage",
+									"type": "Expression"
+								},
+								"storedProcedureParameters": {
+									"config_id": {
+										"value": {
+											"value": "@item().config_id",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "ls_azure_sql",
+								"type": "LinkedServiceReference"
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"p_files": {
+				"type": "array",
+				"defaultValue": [
+					{
+						"config_id": 1,
+						"source_name": "credit_bureau",
+						"container": "raw",
+						"folder_path": "credit_bureau",
+						"file_name": "credit_bureau_reports_1.csv",
+						"stage_table": "stg.credit_bureau_reports",
+						"target_table": "dbo.credit_bureau_reports",
+						"load_type": "MERGE"
+					},
+					{
+						"config_id": 2,
+						"source_name": "payment_gateway",
+						"container": "raw",
+						"folder_path": "payment_gateway",
+						"file_name": "payment_gateway_logs_1.csv",
+						"stage_table": "stg.payment_gateway_logs",
+						"target_table": "dbo.payment_gateway_logs",
+						"load_type": "APPEND"
+					}
+				]
+			}
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-11-04T20:19:33Z"
+	},
+	"type": "Microsoft.Synapse/workspaces/pipelines"
+}
